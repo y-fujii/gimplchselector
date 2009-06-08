@@ -1,16 +1,20 @@
-.PHONY: all clean install
+.PHONY: all clean install uninstall
 
-all: libcolorsel_lch.so
+all: libcolor-selector-lch.so
 
 clean:
-	rm -f libcolorsel_lch.so
+	rm -f libcolor-selector-lch.so
 
-install: libcolorsel_lch.so
-	sudo install libcolorsel_lch.so $$(gimptool-2.0 --gimpplugindir)/modules/
+install: libcolor-selector-lch.so
+	sudo install libcolor-selector-lch.so $$(gimptool-2.0 --gimpplugindir)/modules/
+
+uninstall:
+	sudo rm $$(gimptool-2.0 --gimpplugindir)/modules/libcolor-selector-lch.so
 
 
-libcolorsel_lch.so: color-selector-lch.c
-	gcc \
-		-shared -fPIC -Wall -Wextra -Wno-unused-parameter -O3 \
-		-o libcolorsel_lch.so color-selector-lch.c \
+libcolor-selector-lch.so: main.cpp selector-lch.hpp color-space.hpp
+	$(CXX) \
+		-ansi -pedantic -Wall -Wextra \
+		-shared -fPIC -O3 \
+		-o libcolor-selector-lch.so main.cpp \
 		$$(gimptool-2.0 --cflags) $$(gimptool-2.0 --libs)
