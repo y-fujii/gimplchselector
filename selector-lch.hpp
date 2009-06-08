@@ -91,15 +91,7 @@ struct LchSelector: GimpColorSelector {
 		color::convert( lab, *rgb );
 		color::convert( lch, lab );
 
-		gtk_adjustment_set_value( self->scaleL, lch.l * 100.0 );
-		gtk_adjustment_set_value( self->scaleC, lch.c * 100.0 );
-		gtk_adjustment_set_value( self->scaleH, lch.h * (180.0 / M_PI) );
-
-		gtk_widget_queue_draw_area(
-			GTK_WIDGET( self->area ), 0, 0,
-			GTK_WIDGET( self->area )->allocation.width,
-			GTK_WIDGET( self->area )->allocation.height
-		);
+		setLch( self, lch );
 	}
 
 	static void onValueChanged( GtkAdjustment*, LchSelector* self ) {
@@ -164,6 +156,18 @@ struct LchSelector: GimpColorSelector {
 		/*
 		cairo_t* ctx = gdk_cairo_create( GTK_WIDGET( area )->window );
 		*/
+	}
+
+	static void setLch( LchSelector* self, const color::Lch& lch ) {
+		gtk_adjustment_set_value( self->scaleL, lch.l * 100.0 );
+		gtk_adjustment_set_value( self->scaleC, lch.c * 100.0 );
+		gtk_adjustment_set_value( self->scaleH, lch.h * (180.0 / M_PI) );
+
+		gtk_widget_queue_draw_area(
+			GTK_WIDGET( self->area ), 0, 0,
+			GTK_WIDGET( self->area )->allocation.width,
+			GTK_WIDGET( self->area )->allocation.height
+		);
 	}
 	
 	static void getLch( LchSelector* self, color::Lch& lch ) {
