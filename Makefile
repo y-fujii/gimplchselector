@@ -17,4 +17,4 @@ libcolor-selector-lch.so: main.cpp selector-lch.hpp color-space.hpp
 		-ansi -pedantic -Wall -Wextra \
 		-shared -fPIC -O3 \
 		-o libcolor-selector-lch.so main.cpp \
-		$$(gimptool-2.0 --cflags) $$(gimptool-2.0 --libs)
+		$$(gimptool-2.0 --cflags --libs)

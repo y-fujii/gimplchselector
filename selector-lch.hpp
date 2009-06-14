@@ -30,14 +30,14 @@ struct LchSelector: GimpColorSelector {
 	GtkAdjustment* scaleC;
 	GtkAdjustment* scaleH;
 	GtkDrawingArea* area;
-	GdkPixbuf* pixbuf;
+	cairo_surface_t* image;
 	double prevL;
 
 	static void ctor( LchSelector* self ) {
-		self->pixbuf = createColorMap( 1, 1, 0.0 );
+		self->image = cairo_image_surface_create( CAIRO_FORMAT_RGB24, 1, 1 );
 		self->prevL = std::numeric_limits<double>::quiet_NaN();
 
-		GtkWidget* vbox = gtk_vbox_new( FALSE, 0 );
+		GtkWidget* vbox = gtk_vbox_new( FALSE, 4 );
 		gtk_box_pack_start( GTK_BOX( self ), vbox, TRUE, TRUE, 0 );
 
 		GtkWidget* table = gtk_table_new( 3, 3, FALSE );
@@ -82,7 +82,11 @@ struct LchSelector: GimpColorSelector {
 	}
 
 	static void dtor( LchSelector* self ) {
-		unref( self->pixbuf );
+		// dtor() may be called more than once.
+		if( self->image != 0 ) {
+			cairo_surface_destroy( self->image );
+			self->image = 0;
+		}
 	}
 
 	static void setColor( LchSelector* self, const GimpRGB* rgb, const GimpHSV* ) {
@@ -124,38 +128,38 @@ struct LchSelector: GimpColorSelector {
 		);
 		color::Lch lch;
 		getLch( self, lch );
-
-		if( size != gdk_pixbuf_get_width( self->pixbuf ) || lch.l != self->prevL ) {
-			unref( self->pixbuf );
-			self->pixbuf = createColorMap( size, size, lch.l );
+		if( size != cairo_image_surface_get_width( self->image ) ) {
+			cairo_surface_destroy( self->image );
+			self->image = cairo_image_surface_create( CAIRO_FORMAT_RGB24, size, size );
+			generateColorMap( self->image, lch.l );
 			self->prevL = lch.l;
 		}
-		gdk_draw_pixbuf(
-			GTK_WIDGET( area )->window, NULL,
-			self->pixbuf,
-			0, 0, 0, 0,
-			-1, -1,
-			GDK_RGB_DITHER_NORMAL, 0, 0
-		);
+		else if( lch.l != self->prevL ) {
+			generateColorMap( self->image, lch.l );
+			self->prevL = lch.l;
+		}
 
-		unsigned x0, y0, x1, y1;
-		toScreenPos( x0, y0, -lch.c, +lch.c, size );
-		toScreenPos( x1, y1, +lch.c, -lch.c, size );
-		gdk_draw_arc(
-			GTK_WIDGET( area )->window, GTK_WIDGET( area )->style->white_gc,
-			FALSE, x0, y0, x1 - x0, y1 - y0, 0, 360 * 64
-		);
-
-		toScreenPos( x0, y0, 0.0, 0.0, size );
-		toScreenPos( x1, y1, 2.0 * cos( lch.h ), 2.0 * sin( lch.h ), size );
-		gdk_draw_line(
-			GTK_WIDGET( area )->window, GTK_WIDGET( area )->style->white_gc,
-			x0, y0, x1, y1
-		);
-
-		/*
 		cairo_t* ctx = gdk_cairo_create( GTK_WIDGET( area )->window );
-		*/
+		cairo_save( ctx );
+
+		cairo_set_source_surface( ctx, self->image, 0.0, 0.0 );
+		cairo_paint( ctx );
+
+		cairo_scale( ctx, +(size - 1) / 2.0, -(size - 1) / 2.0 );
+		cairo_translate( ctx, +1.0, -1.0 );
+
+		cairo_arc( ctx, 0.0, 0.0, lch.c, 0.0, M_PI * 2.0 );
+		cairo_close_path( ctx );
+
+		cairo_move_to( ctx, 0.0, 0.0 );
+		cairo_line_to( ctx, 2.0 * cos( lch.h ), 2.0 * sin( lch.h ) );
+
+		cairo_restore( ctx );
+		cairo_set_source_rgb( ctx, 255, 255, 255 );
+		cairo_set_line_width( ctx, 1.0 );
+		cairo_stroke( ctx );
+
+		cairo_destroy( ctx );
 	}
 
 	static void setLch( LchSelector* self, const color::Lch& lch ) {
@@ -176,10 +180,13 @@ struct LchSelector: GimpColorSelector {
 		lch.h = self->scaleH->value * (M_PI / 180.0);
 	}
 
-	static GdkPixbuf* createColorMap( unsigned w, unsigned h, double l ) {
-		GdkPixbuf* pixbuf = gdk_pixbuf_new( GDK_COLORSPACE_RGB, FALSE, 8, w, h );
-		uint8_t* arr = gdk_pixbuf_get_pixels( pixbuf );
-		unsigned stride = gdk_pixbuf_get_rowstride( pixbuf );
+	static void generateColorMap( cairo_surface_t* img, double l ) {
+		unsigned w = cairo_image_surface_get_width( img );
+		unsigned h = cairo_image_surface_get_height( img );
+		unsigned stride = cairo_image_surface_get_stride( img ) / 4;
+		uint32_t* arr = reinterpret_cast<uint32_t*>(
+			cairo_image_surface_get_data( img )
+		);
 
 		for( unsigned y = 0; y < h; ++y ) {
 			for( unsigned x = 0; x < w; ++x ) {
@@ -190,23 +197,17 @@ struct LchSelector: GimpColorSelector {
 
 				GimpRGB srgb;
 				if( convert( srgb, lab ) ) {
-					arr[x * 3 + y * stride + 0] = uint8_t( srgb.r * 255.0 ); 
-					arr[x * 3 + y * stride + 1] = uint8_t( srgb.g * 255.0 );
-					arr[x * 3 + y * stride + 2] = uint8_t( srgb.b * 255.0 );
+					arr[x + y * stride] = (
+						(unsigned( srgb.r * 255.0 ) << 16) |
+						(unsigned( srgb.g * 255.0 ) <<  8) |
+						(unsigned( srgb.b * 255.0 )      )
+					);
 				}
 				else {
-					arr[x * 3 + y * stride + 0] = 186;
-					arr[x * 3 + y * stride + 1] = 186;
-					arr[x * 3 + y * stride + 2] = 186;
+					arr[x + y * stride] = (186 << 16) | (186 << 8) | 186;
 				}
 			}
 		}
-		return pixbuf;
-	}
-
-	static void toScreenPos( unsigned& sx, unsigned& sy, double rx, double ry, unsigned s ) {
-		sx = unsigned( (+rx + 1.0) * ((s - 1) / 2.0) );
-		sy = unsigned( (-ry + 1.0) * ((s - 1) / 2.0) );
 	}
 };
 
