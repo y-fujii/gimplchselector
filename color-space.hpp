@@ -12,10 +12,20 @@
 namespace color {
 
 struct Lch {
+	Lch() {}
+
+	Lch( double l_, double c_, double h_ ):
+		l( l_ ), c( c_ ), h( h_ ) {}
+
 	double l, c, h;
 };
 
 struct Lab {
+	Lab() {}
+
+	Lab( double l_, double a_, double b_ ):
+		l( l_ ), a( a_ ), b( b_ ) {}
+
 	double l, a, b;
 };
 
