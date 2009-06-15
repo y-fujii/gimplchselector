@@ -128,6 +128,7 @@ struct LchSelector: GimpColorSelector {
 		);
 		color::Lch lch;
 		getLch( self, lch );
+
 		if( size != cairo_image_surface_get_width( self->image ) ) {
 			cairo_surface_destroy( self->image );
 			self->image = cairo_image_surface_create( CAIRO_FORMAT_RGB24, size, size );
@@ -190,21 +191,21 @@ struct LchSelector: GimpColorSelector {
 
 		for( unsigned y = 0; y < h; ++y ) {
 			for( unsigned x = 0; x < w; ++x ) {
-				color::Lab lab;
-				lab.l = l;
-				lab.a = x * (+2.0 / (w - 1)) - 1.0;
-				lab.b = y * (-2.0 / (h - 1)) + 1.0;
+				color::Lab lab(
+					l,
+					x * (+2.0 / (w - 1)) - 1.0,
+					y * (-2.0 / (h - 1)) + 1.0
+				);
 
 				GimpRGB srgb;
 				if( convert( srgb, lab ) ) {
-					arr[x + y * stride] = (
+					arr[x + y * stride] =
 						(unsigned( srgb.r * 255.0 ) << 16) |
 						(unsigned( srgb.g * 255.0 ) <<  8) |
-						(unsigned( srgb.b * 255.0 )      )
-					);
+						 unsigned( srgb.b * 255.0 );
 				}
 				else {
-					arr[x + y * stride] = (186 << 16) | (186 << 8) | 186;
+					arr[x + y * stride] = 0xbababa;
 				}
 			}
 		}
